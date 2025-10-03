@@ -22,5 +22,5 @@ jobs:
           port: 2298
           username: ${{ secrets.SERVER_USER }}
           ssh_private_key: ${{ secrets.DEPLOY_KEY }}
-          remote_path: /home/core1.health-ease-hospital.com/auth-service
+          remote_path: /home/core1.health-ease-hospital.com/auth.health-ease-hospital.com
           args: "-o StrictHostKeyChecking=no"
