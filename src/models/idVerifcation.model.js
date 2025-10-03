@@ -12,11 +12,7 @@ const idVerificationSchema = new mongoose.Schema(
       type: String, // Reference to the stored image file
       required: true,
     },
-    idVerificationStatus: {
-      type: String,
-      enum: ['Pending', 'Approved', 'Rejected', 'Manual Review'],
-      default: 'Pending',
-    },
+
     idExtractedData: {
       fullName: { type: String },
       dob: { type: Date },

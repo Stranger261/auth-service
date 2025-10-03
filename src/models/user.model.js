@@ -1,22 +1,24 @@
+// models/user.model.js - Keep it simple, data-focused
 import mongoose from 'mongoose';
 
 const userSchema = new mongoose.Schema(
   {
-    username: {
-      type: String,
-      required: true,
-      trim: true,
-      // Removed unique: true - will handle with partial index below
-    },
-
-    fullname: { type: String, required: true },
-
+    lastname: { type: String, required: true },
+    firstname: { type: String, required: true },
+    middlename: { type: String },
     email: {
       type: String,
       required: true,
       lowercase: true,
       trim: true,
-      // Removed unique: true - will handle with partial index below
+      unique: true,
+
+      validate: {
+        validator: function (v) {
+          return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v);
+        },
+        message: props => `${props.value} is not a valid email address!`,
+      },
     },
 
     password: {
@@ -26,16 +28,37 @@ const userSchema = new mongoose.Schema(
       select: false,
     },
 
+    phone: {
+      type: String,
+      unique: true,
+      default: null,
+    },
+    dateOfBirth: { type: Date, default: null },
+    zipCode: { type: String, default: null },
+    address: { type: String, default: null },
+    city: { type: String, default: null },
+
     role: {
       type: String,
-      enum: ['patient', 'frontdesk', 'nurse', 'doctor', 'admin', 'superadmin'],
-      required: true,
+      enum: [
+        'patient',
+        'receptionist',
+        'nurse',
+        'doctor',
+        'admin',
+        'superadmin',
+      ],
       default: 'patient',
     },
 
-    faceId: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: 'Face',
+    gender: {
+      type: String,
+      lowercase: true,
+    },
+
+    department: {
+      type: String, // Store as string since it's from external service
+      default: null,
     },
 
     idVerificationId: {
@@ -43,24 +66,19 @@ const userSchema = new mongoose.Schema(
       ref: 'IdVerification',
     },
 
-    // Registration status fields
-    isVerified: {
-      type: Boolean,
-      default: false,
-    },
-
-    isDraft: {
-      type: Boolean,
-      default: true,
-    },
-
-    registrationStep: {
+    emergencyContact: {
       type: String,
-      enum: ['step1', 'step2', 'step3', 'completed'],
-      default: 'step1',
     },
 
-    // Face enrollment status
+    emergencyPhone: {
+      type: String,
+      unique: true,
+      default: null,
+    },
+
+    isVerified: { type: Boolean, default: false },
+    isActive: { type: Boolean, default: true }, // For Active/Inactive status
+
     faceEnrollmentStatus: {
       type: String,
       enum: ['pending', 'completed', 'failed'],
@@ -76,101 +94,26 @@ const userSchema = new mongoose.Schema(
     },
     registrationCompleted: Date,
   },
-  {
-    timestamps: true,
-  }
+  { timestamps: true }
 );
 
-// Create compound indexes for efficient querying
-userSchema.index({ isDraft: 1, isVerified: 1 });
-userSchema.index({ isDraft: 1, registrationStep: 1 });
+userSchema.virtual('age').get(function () {
+  if (!this.dateOfBirth) return null;
 
-// Partial unique indexes - only enforce uniqueness for non-draft users
-userSchema.index(
-  { username: 1 },
-  {
-    unique: true,
-    partialFilterExpression: { isDraft: false },
-    name: 'username_unique_non_draft',
+  const today = new Date();
+  const birthDate = new Date(this.dateOfBirth);
+
+  let age = today.getFullYear() - birthDate.getFullYear();
+  const m = today.getMonth() - birthDate.getMonth();
+
+  if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) {
+    age--;
   }
-);
 
-userSchema.index(
-  { email: 1 },
-  {
-    unique: true,
-    partialFilterExpression: { isDraft: false },
-    name: 'email_unique_non_draft',
-  }
-);
-
-// Optional: Index for cleanup queries
-userSchema.index({ isDraft: 1, createdAt: 1 });
-
-// Virtual for checking if user is fully registered
-userSchema.virtual('isFullyRegistered').get(function () {
-  return (
-    !this.isDraft && this.isVerified && this.registrationStep === 'completed'
-  );
+  return age;
 });
-
-// Static method to find only real (non-draft) users
-userSchema.statics.findReal = function (filter = {}) {
-  return this.find({ ...filter, isDraft: false });
-};
-
-// Static method to find draft users
-userSchema.statics.findDrafts = function (filter = {}) {
-  return this.find({ ...filter, isDraft: true });
-};
-
-// Static method to cleanup old draft users
-userSchema.statics.cleanupDrafts = function (olderThanHours = 24) {
-  const cutoff = new Date(Date.now() - olderThanHours * 60 * 60 * 1000);
-  return this.deleteMany({
-    isDraft: true,
-    createdAt: { $lt: cutoff },
-  });
-};
-
-// Instance method to promote draft to real user
-userSchema.methods.promoteToRealUser = async function () {
-  if (!this.isDraft) {
-    throw new Error('User is already a real user');
-  }
-
-  // Check for conflicts with existing real users
-  const conflicts = await this.constructor.findOne({
-    $or: [{ username: this.username }, { email: this.email }],
-    isDraft: false,
-    _id: { $ne: this._id },
-  });
-
-  if (conflicts) {
-    throw new Error('Username or email already taken by another user');
-  }
-
-  // Promote to real user
-  this.isDraft = false;
-  this.isVerified = true;
-  this.registrationStep = 'completed';
-  this.registrationCompleted = new Date();
-
-  return this.save();
-};
-
-// Pre-save middleware to set registrationCompleted
-userSchema.pre('save', function (next) {
-  if (
-    this.isModified('isVerified') &&
-    this.isVerified &&
-    !this.registrationCompleted
-  ) {
-    this.registrationCompleted = new Date();
-  }
-  next();
-});
+userSchema.set('toJSON', { virtuals: true });
+userSchema.set('toObject', { virtuals: true });
 
 const User = mongoose.model('User', userSchema);
-
 export default User;
