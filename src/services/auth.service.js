@@ -229,7 +229,7 @@ export const updateUser = async (id, updatedData) => {
 export const validateUserById = async id => {
   const user = await User.findById(id).select('role active');
 
-  if (!user || !user.active) {
+  if (!user || !user.isActive) {
     return res.status(404).json({ message: 'User not found or inactive.' });
   }
 

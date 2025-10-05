@@ -30,8 +30,8 @@ const userSchema = new mongoose.Schema(
 
     phone: {
       type: String,
-      unique: true,
       default: null,
+      sparse: true,
     },
     dateOfBirth: { type: Date, default: null },
     zipCode: { type: String, default: null },
